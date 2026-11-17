@@ -1,53 +1,107 @@
 """
-Página 4: Preparação e Planejamento para LLMs (TP3 / TP4)
-Descrição: Interface interativa para sanitização do corpus e visualização
-dos dados estruturados para inferência em modelos de linguagem.
+Página 4: Inteligência Artificial e Classificação de Sentimento (LLM Local)
+Descrição: Consome o endpoint POST /processar_texto da FastAPI para classificar
+notícias e textos sobre sustentabilidade utilizando o modelo DistilBERT local.
 """
 
 import os
+import sys
 import json
+import requests
 import streamlit as st
 import pandas as pd
+
+RAIZ_PROJETO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if RAIZ_PROJETO not in sys.path:
+    sys.path.insert(0, RAIZ_PROJETO)
+
 from src.data.preparacao_llm import processar_corpus_para_llm
 
-st.set_page_config(page_title="Preparação para IA - ESG", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="IA & LLM Local - ESG", page_icon="🤖", layout="wide")
 
-st.title("🤖 Preparação de Dados para Recursos de IA (LLMs)")
-st.caption("Tratamento de texto, sanitização e estruturação em JSON para os casos de uso do TP4.")
+st.title("🤖 Análise de Sentimento ESG com LLM Local")
+st.caption("Integração entre Streamlit, FastAPI e HuggingFace Transformers (DistilBERT Multilingual).")
 
-# Apresentação dos casos de uso de IA
-st.markdown("""
-### 🎯 Casos de Uso Estruturados para o TP4:
+URL_API = "http://127.0.0.1:8000"
 
-1. **📝 Sumarização Automática:** Síntese de matérias e relatórios em pontos focais de impacto ambiental.
-2. **🏷️ Classificação de Sentimento ESG:** Rotação de textos para rótulos (*Positivo*, *Neutro*, *Alerta de Risco*).
-3. **💬 Sistema de Perguntas e Respostas (Q&A / RAG):** Vetorização dos documentos para consultas contextuais.
-""")
+# ==========================================================
+# 1. INTERAÇÃO EM TEMPO REAL COM O ENDPOINT POST /processar_texto
+# ==========================================================
+st.subheader("🧠 Classificador de Sentimento em Tempo Real")
+st.write("Envie um texto ou selecione uma notícia coletada para inferência local via FastAPI:")
+
+caminho_json = os.path.join("data", "processed", "dataset_llm_prep.json")
+opcoes_textos = ["Digitar texto personalizado..."]
+
+if os.path.exists(caminho_json):
+    with open(caminho_json, "r", encoding="utf-8") as f:
+        dados_llm = json.load(f)
+    opcoes_textos.extend([item["texto"] for item in dados_llm[:15]])
+
+escolha = st.selectbox("Selecione uma amostra do corpus ou digite abaixo:", opcoes_textos)
+
+texto_para_analise = st.text_area(
+    "Texto para processamento pelo modelo local:",
+    value="" if escolha == "Digitar texto personalizado..." else escolha,
+    height=100,
+    placeholder="Ex.: Prefeitura inaugura novo parque solar e reduz emissão de carbono em 30%."
+)
+
+if st.button("Analisar Sentimento via API (LLM Local)"):
+    with st.spinner("Processando inferência no modelo DistilBERT local..."):
+        try:
+            resposta = requests.post(
+                f"{URL_API}/processar_texto",
+                json={"texto": texto_para_analise},
+                timeout=15
+            )
+            
+            if resposta.status_code == 200:
+                resultado = resposta.json()
+                st.success("Análise concluída e validada pelo Response Model!")
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Sentimento Identificado", resultado["sentimento"])
+                c2.metric("Confiança do Modelo", f"{resultado['confianca'] * 100:.2f}%")
+                c3.metric("Latência CPU Local", f"{resultado['tempo_processamento_ms']:.1f} ms")
+                
+                with st.expander("Visualizar JSON Estruturado (Response Model)"):
+                    st.json(resultado)
+            else:
+                corpo_erro = resposta.json()
+                detalhe_erro = corpo_erro.get("detail", resposta.text)
+                sugestao = corpo_erro.get("sugestao", "")
+                st.error(f"**Erro HTTP {resposta.status_code}:** {detalhe_erro}")
+                if sugestao:
+                    st.info(f"💡 **Orientação:** {sugestao}")
+                
+        except requests.exceptions.Timeout:
+            st.error("Erro de Timeout (504): O servidor demorou mais de 15 segundos para responder.")
+        except requests.exceptions.ConnectionError:
+            st.error("Falha de Conexão (503): Não foi possível conectar ao servidor FastAPI na porta 8000.")
+        except Exception as e:
+            st.error(f"Erro inesperado na requisição: {e}")
 
 st.divider()
 
-# Painel de execução do pipeline de sanitização
-st.subheader("⚙️ Pipeline de Sanitização e Tokenização")
+# ==========================================================
+# 2. PIPELINE DE SANITIZAÇÃO DO CORPUS
+# ==========================================================
+st.subheader("⚙️ Base Textual Sanitizada para IA")
 
 col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.write("Clique no botão abaixo para processar o corpus bruto acumulado (`data/raw/corpus_noticias.txt`) e gerar o schema JSON sanitizado:")
-    if st.button("Executar Sanitização para LLM"):
+    st.write("Atualize o dataset sanitizado em `data/processed/dataset_llm_prep.json` a partir dos textos coletados:")
+    if st.button("Reprocessar Corpus Textual"):
         docs = processar_corpus_para_llm()
-        st.success(f"Pipeline concluído! {len(docs)} documentos sanitizados com sucesso.")
+        st.success(f"Pipeline concluído! {len(docs)} documentos sanitizados.")
         st.rerun()
-
-# Leitura e exibição do JSON processado
-caminho_json = os.path.join("data", "processed", "dataset_llm_prep.json")
 
 with col2:
     if os.path.exists(caminho_json):
         with open(caminho_json, "r", encoding="utf-8") as f:
             dados_llm = json.load(f)
-        
-        st.metric("Total de Documentos Prontos para IA", len(dados_llm))
+        st.metric("Documentos Disponíveis para Inferência", len(dados_llm))
         df_llm = pd.DataFrame(dados_llm)
-        st.dataframe(df_llm[["id", "texto", "tamanho_caracteres"]], use_container_width=True, hide_index=True)
-    else:
-        st.info("O dataset sanitizado ainda não foi gerado. Clique no botão ao lado para executar.")
+        st.dataframe(df_llm[["id", "texto", "tamanho_caracteres"]], width="stretch", hide_index=True)

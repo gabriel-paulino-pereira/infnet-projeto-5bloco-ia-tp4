@@ -35,3 +35,9 @@ Nesta terceira fase, amplia-se a capacidade de ingestão com captura de dados di
 - **Eficácia da Raspagem Dinâmica:** Coleta bem-sucedida de elementos dinâmicos sem falhas de timeout com Selenium.
 - **Modularidade da Interface:** Navegação fluida entre pelo menos 4 páginas estruturadas na aplicação.
 - **Prontidão para LLMs:** Base textual rotulada e sanitizada pronta para pipelines de embeddings e inferência.
+
+---
+
+## 6. Evolução da Arquitetura de Inteligência Artificial (Fase TP4)
+- **Modelo Local Integrado:** `lxyuan/distilbert-base-multilingual-cased-sentiments-student` (DistilBERT multilíngue) executado localmente via `transformers` e `torch` em CPU.
+- **Novo Endpoint RESTful:** Rota `POST /processar_texto` adicionada ao backend FastAPI para realizar análise de sentimento sob demanda com validação de contratos via Pydantic (`Response Models`) e tratamento de exceções HTTP (`400`, `500`, `503`).
